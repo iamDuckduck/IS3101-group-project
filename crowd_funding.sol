@@ -10,8 +10,14 @@ contract CrowdFunding {
     address public creator; // campaign creator
     uint256 public totalCommittedFunds;
     uint256 public totalFlexibleFunds;
-    mapping(address => uint256) public committedBackers; // keep-what-you-raise
-    mapping(address => uint256) public flexibleBackers; // refundable before deadline or after the compaign failed
+    uint256 public flexibleFundBalance; // should track the balance in the contract
+
+    struct backerInfo {
+        uint256 flexibleFund;
+        uint256 committedFund;
+    }
+
+    mapping(address => backerInfo) public backers;
 
     enum Status {
         OPEN, 
@@ -64,16 +70,15 @@ contract CrowdFunding {
         if(campaignStatus == Status.SUCCESS) require(isFlexible == false, "can't not make flexible fund when the campaign is success");
         if (!isFlexible) {
             totalCommittedFunds += msg.value;
-            committedBackers[msg.sender] += msg.value;
+            backers[msg.sender].committedFund += msg.value;
 
             (bool success,) = creator.call{value: msg.value}("");
             require(success, "Transcation failed");
         }
         else{
             totalFlexibleFunds += msg.value;
-            flexibleBackers[msg.sender] += msg.value; 
-            console.log(flexibleBackers[msg.sender]);
-            console.log(msg.sender);
+            flexibleFundBalance += msg.value;
+            backers[msg.sender].flexibleFund += msg.value;
         }
 
         update_campaign_status();
@@ -86,19 +91,27 @@ contract CrowdFunding {
         require(campaignStatus != Status.SUCCESS, 
         "only able to refund status is not equal success");
 
-        uint256 balance = flexibleBackers[msg.sender];
-        require(balance >= amount, "Must have fund larager than refunded amount");
 
+        uint256 balance = backers[msg.sender].flexibleFund;
+        require(balance >= amount, "Must have fund larager than refunded amount");
+        
         totalFlexibleFunds -= amount;
-        flexibleBackers[msg.sender] -= amount;
-        (bool success,) = creator.call{value: amount}("");
-        require(success, "Transcation failed");
+        flexibleFundBalance -= amount;
+        
+        backers[msg.sender].flexibleFund -= amount;
+        (bool success,) = payable(msg.sender).call{value: amount}("");
+        require(success, "Transaction failed");
     }
 
     function withdraw_remaining_funds() public onlyCreator {
         update_campaign_status();
         require(campaignStatus == Status.SUCCESS, "the campagin is not success yet");
-        payable(creator).transfer(totalFlexibleFunds);
+        
+        uint256 temp = flexibleFundBalance;
+        flexibleFundBalance = 0;
+
+        (bool success,) = payable(creator).call{value: temp}("");
+        require(success, "Transaction failed");
     }
 
 }
