@@ -11,12 +11,20 @@ contract CrowdFunding {
     uint256 public totalCommittedFunds;
     uint256 public totalFlexibleFunds;
     uint256 public flexibleFundBalance; // should track the balance in the contract
+    address[] public backerList;
+
+    struct TopContributors {
+        address topCommitted;
+        address topFlexible;
+    }
+    TopContributors public topContributors;
+
 
     struct backerInfo {
         uint256 flexibleFund;
         uint256 committedFund;
+        uint256 joinedDate;
     }
-
     mapping(address => backerInfo) public backers;
 
     enum Status {
@@ -36,6 +44,14 @@ contract CrowdFunding {
         require(block.timestamp < deadline, "campagin deadline expired");
         _;
     }
+
+    // Define events
+    event FundCommitted(address indexed backer, uint256 amount, uint256 totalCommitted);
+    event FundFlexible(address indexed backer, uint256 amount, uint256 totalFlexible);
+    event Refund(address indexed backer, uint256 amount, uint256 remainingFlexibleFund);
+    event TopCommittedContributorChanged(address indexed newTopCommitted, uint256 amount);
+    event TopFlexibleContributorChanged(address indexed newTopFlexible, uint256 amount);
+    event CampaignStatusUpdated(Status status);
 
     constructor(
         address _creator, 
@@ -63,14 +79,30 @@ contract CrowdFunding {
 
         if (totalFunds >= goal) campaignStatus = Status.SUCCESS;
         if (block.timestamp >= deadline && totalFunds < goal) campaignStatus = Status.FAIL;
+
+        emit CampaignStatusUpdated(campaignStatus);
     }
    
     function fund(bool isFlexible) campaignDeadlineCheck public payable {
         require(msg.value > 0, "Fund amount must larger than 0");
+
         if(campaignStatus == Status.SUCCESS) require(isFlexible == false, "can't not make flexible fund when the campaign is success");
+
+        if(backers[msg.sender].joinedDate == 0) {
+            backers[msg.sender].joinedDate = block.timestamp;
+            backerList.push(msg.sender);
+        }
+            
+
         if (!isFlexible) {
             totalCommittedFunds += msg.value;
             backers[msg.sender].committedFund += msg.value;
+
+            if(backers[msg.sender].committedFund > backers[topContributors.topCommitted].committedFund)
+                topContributors.topCommitted = msg.sender;
+
+            emit FundCommitted(msg.sender, msg.value, backers[msg.sender].committedFund);
+            emit TopCommittedContributorChanged(topContributors.topCommitted, backers[topContributors.topCommitted].committedFund);
 
             (bool success,) = creator.call{value: msg.value}("");
             require(success, "Transcation failed");
@@ -79,6 +111,11 @@ contract CrowdFunding {
             totalFlexibleFunds += msg.value;
             flexibleFundBalance += msg.value;
             backers[msg.sender].flexibleFund += msg.value;
+            if(backers[msg.sender].flexibleFund > backers[topContributors.topFlexible].flexibleFund)
+                topContributors.topFlexible = msg.sender;
+
+            emit FundFlexible(msg.sender, msg.value, backers[msg.sender].flexibleFund);
+            emit TopFlexibleContributorChanged(topContributors.topFlexible, backers[topContributors.topFlexible].flexibleFund);
         }
 
         update_campaign_status();
@@ -99,8 +136,11 @@ contract CrowdFunding {
         flexibleFundBalance -= amount;
         
         backers[msg.sender].flexibleFund -= amount;
+        resort_and_update_top_contributer();
+
         (bool success,) = payable(msg.sender).call{value: amount}("");
         require(success, "Transaction failed");
+        emit Refund(msg.sender, amount, backers[msg.sender].flexibleFund);
     }
 
     function withdraw_remaining_funds() public onlyCreator {
@@ -112,6 +152,36 @@ contract CrowdFunding {
 
         (bool success,) = payable(creator).call{value: temp}("");
         require(success, "Transaction failed");
+    }
+
+    function getTopCommittedContributor() view public returns(address) {
+        return topContributors.topCommitted;
+    }
+
+    function getTopFlexibleContributor() view public returns(address) {
+        return topContributors.topFlexible;
+    }
+
+
+    // helper function
+    function resort_and_update_top_contributer() private {
+        address newTopFlexible;
+        uint256 maxFlexibleFund = 0;
+
+        // Loop through all backers
+        for (uint256 i = 0; i < backerList.length; i++) {
+            address currentBacker = backerList[i];
+            uint256 currentFlexibleFund = backers[currentBacker].flexibleFund;
+
+            if (currentFlexibleFund > maxFlexibleFund) {
+                maxFlexibleFund = currentFlexibleFund;
+                newTopFlexible = currentBacker;
+            }
+        }
+
+        if (newTopFlexible != topContributors.topFlexible) {
+            topContributors.topFlexible = newTopFlexible;
+        }
     }
 
 }
