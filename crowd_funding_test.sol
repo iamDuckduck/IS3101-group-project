@@ -140,6 +140,7 @@ contract CrowdFundingTest {
 //  have to inhertance the contract when testings involve msg.sender
 // otherwise we will just use this test contract to call the crowd_funding 
 // which mean we can't control the address of msg.sender when calling external function
+// since it is inhertance test cases will affect each other so pay attention to the flow
 contract CrowdFundingTest2 is CrowdFunding(
                                 address(0x5B38Da6a701c568545dCfcB03FcB875f56beddC4), //acount-0
                                 1000,
@@ -150,6 +151,7 @@ contract CrowdFundingTest2 is CrowdFunding(
     
     address acc0 = TestsAccounts.getAccount(0); 
     address acc1 = TestsAccounts.getAccount(1);
+    address acc2 = TestsAccounts.getAccount(2);
 
 
     /// ====== fund() test suite ====== ///
@@ -160,10 +162,13 @@ contract CrowdFundingTest2 is CrowdFunding(
     function test_backer_flexibleFund() public payable {
         fund(true);
 
-        (uint256 flexibleFund,) = this.backers(acc1);
+        (uint256 flexibleFund, , uint256 joinedDate) = this.backers(acc1);
  
         Assert.equal(flexibleFund, 10, "Backer's Flexible Funds not match");
+        Assert.equal(joinedDate, block.timestamp, "Backer's joinedDate not match"); //test joinedDate added or not
+        Assert.equal(backerList[0], acc1, "backerlist not added"); // test backerlist added or not
     }
+
 
     /// Test flexiable funding (should succeed)
     /// #value: 10
@@ -171,9 +176,17 @@ contract CrowdFundingTest2 is CrowdFunding(
     function test_backer_committedFund() public payable {
         fund(false);
 
-        (, uint256 committedFund) = this.backers(acc1);
+        (, uint256 committedFund, ) = this.backers(acc1);
  
         Assert.equal(committedFund, 10, "Backer's committed Funds not match");
+    }
+
+    /// Test update of top flexible contributer (should succeed)
+    /// #value: 20
+    /// #sender: account-2
+    function test_update_top_flexible_contributer() public payable {
+        fund(true);
+        Assert.equal(this.getTopFlexibleContributor(), acc2, "TopFlexibleContributer not match");
     }
 
     /// ====== refund_flexiable_funds() test suit ====== ///
@@ -181,12 +194,13 @@ contract CrowdFundingTest2 is CrowdFunding(
     /// Test refund_flexiable_funds (should succeed)
     /// require manually test to check sender balance (pass)
     /// #value: 200
-    /// #sender: account-1
-    function test_refund_flexiable_funds() public payable{
+    /// #sender: account-2
+    function test_refund_flexible_funds() public payable{
         fund(true);
-        refund_flexiable_funds(210); // we fund 10 in previous test
-        Assert.equal(this.totalFlexibleFunds(), 0, "Total FlexibleFunds mismatch");
-        Assert.equal(this.flexibleFundBalance(), 0, "flexibleFundBalance not match");
+        refund_flexiable_funds(220); // we fund 20 in previous test from acc2
+        Assert.equal(this.totalFlexibleFunds(), 10, "Total FlexibleFunds mismatch"); // still have 10 from acc1
+        Assert.equal(this.flexibleFundBalance(), 10, "flexibleFundBalance not match");
+        Assert.equal(this.getTopFlexibleContributor(), acc1, "TopFlexibleContributer not match"); // should do a loop and get the top flexible contributer
     }
 
     /// ====== withdraw() test suit ====== ///
@@ -197,10 +211,8 @@ contract CrowdFundingTest2 is CrowdFunding(
     function test_withdraw_when_success() public payable{
         fund(true);
         withdraw_remaining_funds();
-        Assert.equal(this.totalFlexibleFunds(), 1000, "Total FlexibleFunds mismatch");
+        Assert.equal(this.totalFlexibleFunds(), 1010, "Total FlexibleFunds mismatch"); //10 from acc1 and 1000 from account 0
         Assert.equal(this.flexibleFundBalance(), 0, " flexibleFundBalance mismatch");
     }
-
-  
 
 }
