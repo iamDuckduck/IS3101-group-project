@@ -83,41 +83,47 @@ contract CrowdFunding {
         emit CampaignStatusUpdated(campaignStatus);
     }
    
-    function fund(bool isFlexible) campaignDeadlineCheck public payable {
+    function flexible_fund() campaignDeadlineCheck public payable {
         require(msg.value > 0, "Fund amount must larger than 0");
-
-        if(campaignStatus == Status.SUCCESS) require(isFlexible == false, "can't not make flexible fund when the campaign is success");
+        require(campaignStatus != Status.SUCCESS, "can't not make flexible fund when the campaign is success");
 
         if(backers[msg.sender].joinedDate == 0) {
             backers[msg.sender].joinedDate = block.timestamp;
             backerList.push(msg.sender);
         }
-            
 
-        if (!isFlexible) {
-            totalCommittedFunds += msg.value;
-            backers[msg.sender].committedFund += msg.value;
+        totalFlexibleFunds += msg.value;
+        flexibleFundBalance += msg.value;
+        backers[msg.sender].flexibleFund += msg.value;
 
-            if(backers[msg.sender].committedFund > backers[topContributors.topCommitted].committedFund)
-                topContributors.topCommitted = msg.sender;
+        if(backers[msg.sender].flexibleFund > backers[topContributors.topFlexible].flexibleFund)
+            topContributors.topFlexible = msg.sender;
 
-            emit FundCommitted(msg.sender, msg.value, backers[msg.sender].committedFund);
-            emit TopCommittedContributorChanged(topContributors.topCommitted, backers[topContributors.topCommitted].committedFund);
+        emit FundFlexible(msg.sender, msg.value, backers[msg.sender].flexibleFund);
+        emit TopFlexibleContributorChanged(topContributors.topFlexible, backers[topContributors.topFlexible].flexibleFund);
+        update_campaign_status();
+    }
 
-            (bool success,) = creator.call{value: msg.value}("");
-            require(success, "Transcation failed");
-        }
-        else{
-            totalFlexibleFunds += msg.value;
-            flexibleFundBalance += msg.value;
-            backers[msg.sender].flexibleFund += msg.value;
-            if(backers[msg.sender].flexibleFund > backers[topContributors.topFlexible].flexibleFund)
-                topContributors.topFlexible = msg.sender;
 
-            emit FundFlexible(msg.sender, msg.value, backers[msg.sender].flexibleFund);
-            emit TopFlexibleContributorChanged(topContributors.topFlexible, backers[topContributors.topFlexible].flexibleFund);
+    function committed_fund() campaignDeadlineCheck public payable {
+        require(msg.value > 0, "Fund amount must larger than 0");
+
+        if(backers[msg.sender].joinedDate == 0) {
+            backers[msg.sender].joinedDate = block.timestamp;
+            backerList.push(msg.sender);
         }
 
+        totalCommittedFunds += msg.value;
+        backers[msg.sender].committedFund += msg.value;
+
+        if(backers[msg.sender].committedFund > backers[topContributors.topCommitted].committedFund)
+            topContributors.topCommitted = msg.sender;
+
+        emit FundCommitted(msg.sender, msg.value, backers[msg.sender].committedFund);
+        emit TopCommittedContributorChanged(topContributors.topCommitted, backers[topContributors.topCommitted].committedFund);
+
+        (bool success,) = creator.call{value: msg.value}("");
+        require(success, "Transcation failed");
         update_campaign_status();
     }
 
@@ -185,5 +191,3 @@ contract CrowdFunding {
     }
 
 }
-
-
