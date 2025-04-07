@@ -55,7 +55,7 @@ contract CrowdFundingTest {
     /// Test updating campagin_status to success
     /// #value: 1000
     function test_update_campagin_status_success() public payable{
-        crowdfunding.fund{value: 1000}(false);
+        crowdfunding.committed_fund{value: 1000}();
         Assert.equal(uint(crowdfunding.campaignStatus()), 1, "Status mismatch");
     }
 
@@ -75,7 +75,7 @@ contract CrowdFundingTest {
     /// Test zero funding (should fail)
     /// #value: 0
     function test_zero_funding() public payable {
-        try crowdfunding.fund{value: 0}(false) {
+        try crowdfunding.committed_fund{value: 0}() {
             Assert.ok(false, "Should fail on zero fund");
         } catch Error(string memory reason) {
             Assert.equal(reason, "Fund amount must larger than 0", "error message should match");
@@ -85,7 +85,7 @@ contract CrowdFundingTest {
     /// Test flexiable funding (should succeed)
     /// #value: 10
     function test_flexiable_fund() public payable {
-        try crowdfunding.fund{value: 10}(true) {
+        try crowdfunding.flexible_fund{value: 10}() {
             Assert.ok(true, "Funding succeeded");
         } catch Error(string memory reason) {
             Assert.ok(false, string(abi.encodePacked("Funding failed: ", reason)));
@@ -98,7 +98,7 @@ contract CrowdFundingTest {
     /// Test committed funding (should succeed)
     /// #value: 10
     function test_committed_fund() public payable {
-        try crowdfunding.fund{value: 10}(false) {
+        try crowdfunding.committed_fund{value: 10}() {
             Assert.ok(true, "Funding succeeded");
         } catch Error(string memory reason) {
             Assert.ok(false, string(abi.encodePacked("Funding failed: ", reason)));
@@ -111,11 +111,11 @@ contract CrowdFundingTest {
     /// Test flexible fund when campagin is successed (should fail)
     /// #value: 1001
     function test_flexible_fund_when_campagin_is_successed() public payable {
-        crowdfunding.fund{value: 1000}(true);
+        crowdfunding.flexible_fund{value: 1000}();
 
         Assert.equal(uint(crowdfunding.campaignStatus()), 1, "Status mismatch");
 
-        try crowdfunding.fund{value: 1}(true) {
+        try crowdfunding.flexible_fund{value: 1}() {
             Assert.ok(false, "Should fail on flexiable fund when campagin is sucessed");
         } catch Error(string memory reason) {
             Assert.equal(reason, "can't not make flexible fund when the campaign is success", "error message should match");
@@ -126,11 +126,11 @@ contract CrowdFundingTest {
     /// Test overfunded (should success)
     /// #value: 1001
     function test_overfunded() public payable {
-        crowdfunding.fund{value: 1000}(true);
+        crowdfunding.flexible_fund{value: 1000}();
 
         Assert.equal(uint(crowdfunding.campaignStatus()), 1, "Status mismatch");
 
-        crowdfunding.fund{value: 1}(false);
+        crowdfunding.committed_fund{value: 1}();
 
         Assert.equal(crowdfunding.totalCommittedFunds() + crowdfunding.totalFlexibleFunds(), 1001, "Total fund mismatch");
     }
@@ -142,12 +142,12 @@ contract CrowdFundingTest {
 // which mean we can't control the address of msg.sender when calling external function
 // since it is inhertance test cases will affect each other so pay attention to the flow
 contract CrowdFundingTest2 is CrowdFunding(
-                                address(0x5B38Da6a701c568545dCfcB03FcB875f56beddC4), //acount-0
-                                1000,
-                                block.timestamp + 1000,
-                                "test",
-                                "test"
-                            ) {
+        address(0x5B38Da6a701c568545dCfcB03FcB875f56beddC4), //acount-0
+        1000,
+        block.timestamp + 1000,
+        "test",
+        "test"
+) {
     
     address acc0 = TestsAccounts.getAccount(0); 
     address acc1 = TestsAccounts.getAccount(1);
@@ -160,7 +160,7 @@ contract CrowdFundingTest2 is CrowdFunding(
     /// #value: 10
     /// #sender: account-1
     function test_backer_flexibleFund() public payable {
-        fund(true);
+        flexible_fund();
 
         (uint256 flexibleFund, , uint256 joinedDate) = this.backers(acc1);
  
@@ -174,7 +174,7 @@ contract CrowdFundingTest2 is CrowdFunding(
     /// #value: 10
     /// #sender: account-1
     function test_backer_committedFund() public payable {
-        fund(false);
+        committed_fund();
 
         (, uint256 committedFund, ) = this.backers(acc1);
  
@@ -185,7 +185,7 @@ contract CrowdFundingTest2 is CrowdFunding(
     /// #value: 20
     /// #sender: account-2
     function test_update_top_flexible_contributer() public payable {
-        fund(true);
+        flexible_fund();
         Assert.equal(this.getTopFlexibleContributor(), acc2, "TopFlexibleContributer not match");
     }
 
@@ -196,7 +196,7 @@ contract CrowdFundingTest2 is CrowdFunding(
     /// #value: 200
     /// #sender: account-2
     function test_refund_flexible_funds() public payable{
-        fund(true);
+        flexible_fund();
         refund_flexiable_funds(220); // we fund 20 in previous test from acc2
         Assert.equal(this.totalFlexibleFunds(), 10, "Total FlexibleFunds mismatch"); // still have 10 from acc1
         Assert.equal(this.flexibleFundBalance(), 10, "flexibleFundBalance not match");
@@ -209,7 +209,7 @@ contract CrowdFundingTest2 is CrowdFunding(
     /// #value: 1000
     /// #sender: account-0
     function test_withdraw_when_success() public payable{
-        fund(true);
+        flexible_fund();
         withdraw_remaining_funds();
         Assert.equal(this.totalFlexibleFunds(), 1010, "Total FlexibleFunds mismatch"); //10 from acc1 and 1000 from account 0
         Assert.equal(this.flexibleFundBalance(), 0, " flexibleFundBalance mismatch");
